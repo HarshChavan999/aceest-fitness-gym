@@ -66,11 +66,10 @@ pipeline {
             steps {
                 echo '=== Refreshing local live container deployment ==='
                 sh """
-                    docker stop ${APP_NAME}-live || true
-                    docker rm ${APP_NAME}-live || true
+                    docker rm -f ${APP_NAME}-live ${APP_NAME}-app 2>/dev/null || true
                     docker run -d --name ${APP_NAME}-live -p ${HOST_PORT}:${CONTAINER_PORT} ${APP_NAME}:latest
                     sleep 3
-                    docker ps | grep ${APP_NAME}-live
+                    docker ps --filter "name=${APP_NAME}-live"
                 """
             }
         }
