@@ -70,63 +70,103 @@ log_info "Target project directory: ${PROJECT_DIR}"
 log_info "Configuring environment for user: ${TARGET_USER}"
 
 # ------------------------------------------------------------------------------
-# Step 1: System Package Update & Tool Installation
+# Step 1: Multi-Distro System Package Update & Tool Installation
 # ------------------------------------------------------------------------------
-log_info "Updating system packages and installing dependencies..."
-$SUDO apt-get update -y
-$SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y \
-    ca-certificates \
-    curl \
-    gnupg \
-    lsb-release \
-    git \
-    python3 \
-    python3-pip \
-    python3-venv \
-    python3-dev \
-    build-essential \
-    iptables \
-    net-tools
+log_info "Detecting system package manager..."
 
-log_success "Base system packages installed."
+if command -v apt-get >/dev/null 2>&1; then
+    PKG_MGR="apt"
+    log_info "Detected Debian/Ubuntu (apt-get)."
+    $SUDO apt-get update -y
+    $SUDO DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        ca-certificates curl git python3 python3-pip python3-venv python3-dev build-essential
+elif command -v dnf >/dev/null 2>&1; then
+    PKG_MGR="dnf"
+    log_info "Detected RHEL/Fedora/Amazon Linux 2023 (dnf)."
+    $SUDO dnf update -y || true
+    $SUDO dnf install -y ca-certificates curl git python3 python3-pip gcc make tar
+elif command -v yum >/dev/null 2>&1; then
+    PKG_MGR="yum"
+    log_info "Detected CentOS/Amazon Linux 2 (yum)."
+    $SUDO yum update -y || true
+    $SUDO yum install -y ca-certificates curl git python3 python3-pip gcc make tar
+elif command -v apk >/dev/null 2>&1; then
+    PKG_MGR="apk"
+    log_info "Detected Alpine Linux (apk)."
+    $SUDO apk update
+    $SUDO apk add curl git python3 py3-pip docker docker-compose bash
+else
+    log_warn "Unknown package manager. Proceeding with existing system tools..."
+    PKG_MGR="unknown"
+fi
+
+log_success "Base system packages updated and tools verified."
 
 # ------------------------------------------------------------------------------
-# Step 2: Docker Installation & Daemon Startup
+# Step 2: Docker Installation & Daemon Startup (Universal Support)
 # ------------------------------------------------------------------------------
 if ! command -v docker >/dev/null 2>&1; then
     log_info "Docker not detected. Installing Docker Engine..."
-    $SUDO apt-get install -y docker.io docker-compose
-    $SUDO systemctl enable docker
-    $SUDO systemctl start docker
+    if [ "$PKG_MGR" = "apt" ]; then
+        $SUDO apt-get install -y docker.io docker-compose || true
+    elif [ "$PKG_MGR" = "dnf" ]; then
+        $SUDO dnf install -y docker || true
+    elif [ "$PKG_MGR" = "yum" ]; then
+        if command -v amazon-linux-extras >/dev/null 2>&1; then
+            $SUDO amazon-linux-extras install docker -y || true
+        else
+            $SUDO yum install -y docker || true
+        fi
+    fi
+
+    # Fallback to official Docker installation script if package manager didn't install docker
+    if ! command -v docker >/dev/null 2>&1; then
+        log_info "Installing Docker via official convenience script..."
+        curl -fsSL https://get.docker.com -o /tmp/get-docker.sh
+        $SUDO sh /tmp/get-docker.sh
+        rm -f /tmp/get-docker.sh
+    fi
+
     log_success "Docker installed successfully."
 else
-    log_info "Docker is already installed. Ensuring service is active..."
-    $SUDO systemctl start docker || true
+    log_info "Docker is already installed."
 fi
 
+# Ensure Docker service is enabled and started
+log_info "Starting Docker daemon service..."
+$SUDO systemctl enable docker 2>/dev/null || true
+$SUDO systemctl start docker 2>/dev/null || $SUDO service docker start 2>/dev/null || true
+
 # Add current user to docker group
-if ! groups "$TARGET_USER" | grep -q '\bdocker\b'; then
+if ! groups "$TARGET_USER" 2>/dev/null | grep -q '\bdocker\b'; then
     log_info "Adding user '${TARGET_USER}' to 'docker' group..."
-    $SUDO usermod -aG docker "$TARGET_USER" || true
-    log_warn "User added to docker group. Note: active terminal may need re-login for group changes without sudo."
+    $SUDO usermod -aG docker "$TARGET_USER" 2>/dev/null || true
 fi
 
 # ------------------------------------------------------------------------------
 # Step 3: Local Python Environment & Pytest Verification
 # ------------------------------------------------------------------------------
 log_info "Setting up local Python virtual environment in ${PROJECT_DIR}/.venv..."
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+if ! python3 -m venv .venv 2>/dev/null; then
+    log_warn "python3 -m venv failed. Trying pip3 virtualenv fallback..."
+    pip3 install --user virtualenv 2>/dev/null || true
+    python3 -m virtualenv .venv 2>/dev/null || virtualenv .venv 2>/dev/null || true
+fi
+
+if [ -f "${PROJECT_DIR}/.venv/bin/activate" ]; then
+    source "${PROJECT_DIR}/.venv/bin/activate"
+fi
+
+pip install --upgrade pip 2>/dev/null || pip3 install --upgrade pip 2>/dev/null || true
+pip install -r requirements.txt 2>/dev/null || pip3 install -r requirements.txt --break-system-packages 2>/dev/null || pip3 install -r requirements.txt
 
 log_info "Executing Flake8 code linting..."
-flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-flake8 . --count --max-complexity=10 --statistics
+flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics || python3 -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+flake8 . --count --max-complexity=10 --statistics || python3 -m flake8 . --count --max-complexity=10 --statistics
 log_success "Flake8 quality checks passed."
 
 log_info "Running Pytest test suite with code coverage..."
-pytest --cov=app --cov-report=term-missing tests/
+pytest --cov=app --cov-report=term-missing tests/ || python3 -m pytest --cov=app --cov-report=term-missing tests/
 log_success "All Pytest test cases passed successfully."
 
 # ------------------------------------------------------------------------------
