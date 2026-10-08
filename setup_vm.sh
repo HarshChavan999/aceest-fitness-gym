@@ -201,48 +201,104 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# Step 5: Jenkins CI/CD Server Deployment (Port 8080)
 # ------------------------------------------------------------------------------
-log_info "Setting up Jenkins CI Server with Docker socket integration..."
+# Step 5: Jenkins CI/CD Server Deployment (Port 8080 / Port Fallback)
+# ------------------------------------------------------------------------------
+log_info "Configuring Jenkins CI Server with Docker socket integration..."
 
 # Ensure host docker group socket permissions
-$SUDO chmod 666 /var/run/docker.sock || true
+$SUDO chmod 666 /var/run/docker.sock 2>/dev/null || true
 
-# Prepare persistent Jenkins volume
-JENKINS_HOME_DIR="/var/jenkins_home"
-$SUDO mkdir -p "$JENKINS_HOME_DIR"
-$SUDO chown -R 1000:1000 "$JENKINS_HOME_DIR"
-
-$SUDO docker stop jenkins-server 2>/dev/null || true
-$SUDO docker rm jenkins-server 2>/dev/null || true
-
-# Pull official Jenkins LTS image and run with Docker CLI capability
-log_info "Launching Jenkins LTS container on port 8080..."
-$SUDO docker run -d \
-    --name jenkins-server \
-    --restart unless-stopped \
-    -u root \
-    -p 8080:8080 \
-    -p 50000:50000 \
-    -v "$JENKINS_HOME_DIR":/var/jenkins_home \
-    -v /var/run/docker.sock:/var/run/docker.sock \
-    jenkins/jenkins:lts
-
-log_info "Waiting for Jenkins to generate initial administrative credentials (30s)..."
-for i in {1..30}; do
-    if $SUDO test -f "${JENKINS_HOME_DIR}/secrets/initialAdminPassword"; then
-        break
+# Helper to check if a port is in use
+is_port_in_use() {
+    local port=$1
+    if command -v lsof >/dev/null 2>&1; then
+        $SUDO lsof -i ":${port}" >/dev/null 2>&1 && return 0
     fi
-    sleep 2
-done
+    if command -v ss >/dev/null 2>&1; then
+        ss -tlpn 2>/dev/null | grep -q ":${port} " && return 0
+    fi
+    if command -v netstat >/dev/null 2>&1; then
+        netstat -tlpn 2>/dev/null | grep -q ":${port} " && return 0
+    fi
+    (echo >/dev/tcp/127.0.0.1/${port}) 2>/dev/null && return 0
+    return 1
+}
 
-JENKINS_PASSWORD="[Generating, check in a moment with: sudo cat ${JENKINS_HOME_DIR}/secrets/initialAdminPassword]"
-if $SUDO test -f "${JENKINS_HOME_DIR}/secrets/initialAdminPassword"; then
-    JENKINS_PASSWORD=$($SUDO cat "${JENKINS_HOME_DIR}/secrets/initialAdminPassword")
+NATIVE_JENKINS=false
+JENKINS_PORT=8080
+JENKINS_PASSWORD=""
+JENKINS_STATUS=""
+
+# Check if native Jenkins is already installed & running on the VM
+if systemctl is-active --quiet jenkins 2>/dev/null || (curl -s -I http://127.0.0.1:8080/ 2>/dev/null | grep -iq "jenkins"); then
+    log_success "Native Jenkins service detected already running on port 8080!"
+    NATIVE_JENKINS=true
+    JENKINS_PORT=8080
+    JENKINS_STATUS="RUNNING (Native System Service on Port 8080)"
+
+    # Grant native jenkins user permission to run docker
+    log_info "Configuring Docker permissions for native jenkins user..."
+    $SUDO usermod -aG docker jenkins 2>/dev/null || true
+    $SUDO systemctl restart jenkins 2>/dev/null || true
+
+    if [ -f "/var/lib/jenkins/secrets/initialAdminPassword" ]; then
+        JENKINS_PASSWORD=$($SUDO cat "/var/lib/jenkins/secrets/initialAdminPassword")
+    elif [ -f "/var/jenkins_home/secrets/initialAdminPassword" ]; then
+        JENKINS_PASSWORD=$($SUDO cat "/var/jenkins_home/secrets/initialAdminPassword")
+    else
+        JENKINS_PASSWORD="[Run: sudo cat /var/lib/jenkins/secrets/initialAdminPassword]"
+    fi
+else
+    # Determine available host port for Jenkins container
+    if is_port_in_use 8080; then
+        log_warn "Port 8080 is currently occupied by another process on this VM."
+        for test_port in 8081 8088 9090 8888; do
+            if ! is_port_in_use $test_port; then
+                JENKINS_PORT=$test_port
+                log_info "Selected open alternate port for Jenkins container: ${JENKINS_PORT}"
+                break
+            fi
+        done
+    fi
+
+    JENKINS_HOME_DIR="/var/jenkins_home"
+    $SUDO mkdir -p "$JENKINS_HOME_DIR"
+    $SUDO chown -R 1000:1000 "$JENKINS_HOME_DIR" 2>/dev/null || true
+
+    $SUDO docker stop jenkins-server 2>/dev/null || true
+    $SUDO docker rm jenkins-server 2>/dev/null || true
+
+    log_info "Launching Jenkins LTS container on port ${JENKINS_PORT}..."
+    $SUDO docker run -d \
+        --name jenkins-server \
+        --restart unless-stopped \
+        -u root \
+        -p ${JENKINS_PORT}:8080 \
+        -p 50000:50000 \
+        -v "$JENKINS_HOME_DIR":/var/jenkins_home \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        jenkins/jenkins:lts
+
+    JENKINS_STATUS="RUNNING (Docker container: jenkins-server on Port ${JENKINS_PORT})"
+
+    log_info "Waiting for Jenkins credentials to initialize..."
+    for i in {1..30}; do
+        if $SUDO test -f "${JENKINS_HOME_DIR}/secrets/initialAdminPassword"; then
+            break
+        fi
+        sleep 2
+    done
+
+    if $SUDO test -f "${JENKINS_HOME_DIR}/secrets/initialAdminPassword"; then
+        JENKINS_PASSWORD=$($SUDO cat "${JENKINS_HOME_DIR}/secrets/initialAdminPassword")
+    else
+        JENKINS_PASSWORD="[Run: sudo cat ${JENKINS_HOME_DIR}/secrets/initialAdminPassword]"
+    fi
 fi
 
 # Detect public/external IP
-PUBLIC_IP=$(curl -s https://ifconfig.me || curl -s https://api.ipify.org || hostname -I | awk '{print $1}')
+PUBLIC_IP=$(curl -s https://ifconfig.me 2>/dev/null || curl -s https://api.ipify.org 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')
 
 # ------------------------------------------------------------------------------
 # Step 6: Summary & Handoff Dashboard
@@ -259,20 +315,21 @@ echo -e "   • Health Check:   ${CYAN}http://${PUBLIC_IP}:5000/health${NC}"
 echo -e "   • Status:         ${GREEN}RUNNING (Docker container: aceest-fitness-app)${NC}"
 echo ""
 echo -e "${BOLD}2. Jenkins CI/CD Server:${NC}"
-echo -e "   • Local URL:      ${CYAN}http://localhost:8080${NC}"
-echo -e "   • Public URL:     ${CYAN}http://${PUBLIC_IP}:8080${NC}"
+echo -e "   • Local URL:      ${CYAN}http://localhost:${JENKINS_PORT}${NC}"
+echo -e "   • Public URL:     ${CYAN}http://${PUBLIC_IP}:${JENKINS_PORT}${NC}"
 echo -e "   • Admin Password: ${YELLOW}${JENKINS_PASSWORD}${NC}"
-echo -e "   • Status:         ${GREEN}RUNNING (Docker container: jenkins-server)${NC}"
+echo -e "   • Status:         ${GREEN}${JENKINS_STATUS}${NC}"
 echo ""
 echo -e "${BOLD}3. Local Virtual Environment & Pytest Quality Gate:${NC}"
 echo -e "   • Path:           ${PROJECT_DIR}/.venv"
 echo -e "   • All 24 unit tests: ${GREEN}PASSED (Flake8 clean, 94%+ coverage)${NC}"
 echo ""
 echo -e "${BOLD}4. Jenkins Job Configuration Guide:${NC}"
-echo -e "   a. Open http://${PUBLIC_IP}:8080 and paste the Admin Password above."
+echo -e "   a. Open http://${PUBLIC_IP}:${JENKINS_PORT} and paste the Admin Password above."
 echo -e "   b. Select 'Install Suggested Plugins'."
 echo -e "   c. Create a 'Pipeline' project named 'ACEest-Fitness-CI'."
 echo -e "   d. Under Pipeline Definition, select 'Pipeline script from SCM' -> Git."
-echo -e "   e. Provide your GitHub Repository URL. The build will execute ${BOLD}Jenkinsfile${NC} automatically!"
+echo -e "   e. Provide your GitHub Repository URL: https://github.com/DrSunandaPandita/aceest-fitness-gym.git"
+echo -e "   f. Save and trigger 'Build Now'. It will execute ${BOLD}Jenkinsfile${NC} automatically!"
 echo ""
 echo -e "${BOLD}${GREEN}==============================================================================${NC}"
