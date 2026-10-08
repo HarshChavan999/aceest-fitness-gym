@@ -1,0 +1,90 @@
+name: ACEest Fitness CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  # =========================================================================
+  # Stage 1: Build, Lint & Unit Test
+  # =========================================================================
+  build-lint-test:
+    name: Build, Lint & Unit Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Stage 1A: Lint with Flake8
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Exit-zero treats all errors as warnings. Max-line-length is 120 chars.
+          flake8 . --count --max-complexity=10 --statistics
+
+      - name: Stage 1B: Unit Testing with Pytest
+        run: |
+          pytest --cov=app --cov-report=term-missing --cov-report=xml --junitxml=pytest-results.xml tests/
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results
+          path: |
+            pytest-results.xml
+            coverage.xml
+
+  # =========================================================================
+  # Stage 2: Docker Image Assembly & In-Container Test Execution
+  # =========================================================================
+  docker-assembly-and-validation:
+    name: Docker Image Assembly & In-Container Validation
+    needs: build-lint-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Stage 2A: Docker Image Assembly
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          tags: aceest-fitness:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Stage 2B: In-Container Automated Testing
+        run: |
+          echo "Executing Pytest suite inside containerized environment..."
+          docker run --rm aceest-fitness:latest pytest -v tests/
+
+      - name: Stage 2C: Container Healthcheck Verification
+        run: |
+          echo "Spinning up temporary container to verify health probe..."
+          docker run -d --name aceest-test-container -p 5000:5000 aceest-fitness:latest
+          sleep 5
+          docker ps
+          curl -f http://127.0.0.1:5000/health || exit 1
+          docker stop aceest-test-container
+          docker rm aceest-test-container
