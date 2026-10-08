@@ -1,6 +1,6 @@
 # ACEest Fitness & Gym — Automated CI/CD Pipeline
 
-[![CI/CD Pipeline](https://github.com/placeholder-org/aceest-fitness/actions/workflows/main.yml/badge.svg)](https://github.com/placeholder-org/aceest-fitness/actions)
+[![CI/CD Pipeline](https://github.com/DrSunandaPandita/aceest-fitness-gym/actions/workflows/main.yml/badge.svg)](https://github.com/DrSunandaPandita/aceest-fitness-gym/actions)
 [![Python Version](https://img.shields.io/badge/python-3.11%20%7C%203.14-blue.svg)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-containerized-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com/)
 [![Pytest](https://img.shields.io/badge/tests-24%20passed-brightgreen.svg?logo=pytest)](https://docs.pytest.org/)
