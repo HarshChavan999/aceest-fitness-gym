@@ -3,6 +3,7 @@ ACEest Fitness & Gym — Core Web Application
 Modular Flask application handling membership, class scheduling, health metrics, and system diagnostics.
 """
 
+import os
 import re
 from datetime import datetime, timezone
 from threading import Lock
@@ -388,4 +389,5 @@ def calculate_bmi():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    port = int(os.environ.get('PORT', 5001))
+    app.run(host='0.0.0.0', port=port, debug=True)
