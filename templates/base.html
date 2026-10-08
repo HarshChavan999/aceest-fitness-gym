@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}ACEest Fitness & Gym — Modern DevOps Platform{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+  <header class="header">
+    <div class="container nav">
+      <a href="/" class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 18h12"></path>
+          <path d="M6 6h12"></path>
+          <path d="m3 12 18 0"></path>
+          <circle cx="6" cy="12" r="3"></circle>
+          <circle cx="18" cy="12" r="3"></circle>
+        </svg>
+        <span>ACEest Fitness</span>
+        <span class="brand-badge">DevOps CI/CD</span>
+      </a>
+
+      <nav class="nav-links">
+        <a href="/" class="{% if request.path == '/' %}active{% endif %}">Overview</a>
+        <a href="/members" class="{% if request.path == '/members' %}active{% endif %}">Members</a>
+        <a href="/classes" class="{% if request.path == '/classes' %}active{% endif %}">Studio Classes</a>
+        <a href="/calculator" class="{% if request.path == '/calculator' %}active{% endif %}">Metrics & BMI</a>
+      </nav>
+
+      <div class="nav-actions">
+        <a href="/health" target="_blank" class="badge badge-success" style="cursor: pointer;" title="API Healthcheck">
+          ● System Healthy
+        </a>
+        <a href="https://github.com" target="_blank" class="btn btn-secondary btn-sm">
+          GitHub Repo
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main style="flex: 1;">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <div class="container">
+      <p>© 2026 ACEest Fitness & Gym — DevOps Engineering Assignment 1. Automated via GitHub Actions, Pytest, Docker & Jenkins.</p>
+    </div>
+  </footer>
+
+  <div id="toast"></div>
+
+  <script>
+    function showToast(message, isError = false) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.style.borderColor = isError ? 'rgba(239, 68, 68, 0.4)' : '#3f3f46';
+      toast.style.display = 'block';
+      setTimeout(() => {
+        toast.style.display = 'none';
+      }, 3500);
+    }
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

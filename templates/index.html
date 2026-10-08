@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-pill">
+      <span class="dot"></span>
+      <span>Continuous Integration & Deployment Pipeline Active</span>
+    </div>
+    <h1>High-Performance Fitness Management for Modern Athletes</h1>
+    <p>Engineered for ACEest Fitness & Gym. Fully containerized Flask backend powered by Docker, Pytest quality gates, and automated Jenkins & GitHub Actions workflows.</p>
+    
+    <div style="display: flex; gap: 1rem; justify-content: center; margin-top: 1.5rem;">
+      <a href="/members" class="btn btn-primary">Manage Members</a>
+      <a href="/classes" class="btn btn-secondary">Explore Class Schedules</a>
+      <a href="/calculator" class="btn btn-outline">BMI & Caloric Target</a>
+    </div>
+  </section>
+
+  <!-- Live Metrics Grid -->
+  <section style="margin-bottom: 3.5rem;">
+    <div class="grid-4" id="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Active Members</div>
+        <div class="stat-value" id="stat-members">--</div>
+        <div class="stat-sub">Registered athletes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Studio Classes</div>
+        <div class="stat-value" id="stat-classes">--</div>
+        <div class="stat-sub">Scheduled daily</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Occupancy Rate</div>
+        <div class="stat-value" id="stat-occupancy">--%</div>
+        <div class="stat-sub">Live studio capacity</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">CI/CD Status</div>
+        <div class="stat-value" style="color: #4ade80; font-size: 1.7rem;">PASSED</div>
+        <div class="stat-sub">Jenkins & GitHub Actions</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Membership Plans Section -->
+  <section style="margin-bottom: 4rem;">
+    <div style="margin-bottom: 1.5rem;">
+      <h2 style="font-size: 1.75rem; font-weight: 700; letter-spacing: -0.02em;">Tiered Membership Plans</h2>
+      <p style="color: var(--muted-foreground); font-size: 0.95rem;">Select an optimized tier crafted for athletic progression.</p>
+    </div>
+
+    <div class="grid-3">
+      {% for plan in plans %}
+      <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+        <div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+            <span class="badge badge-zinc">{{ plan.badge }}</span>
+            <span style="font-size: 0.8rem; color: var(--muted-foreground); text-transform: uppercase;">{{ plan.billing }}</span>
+          </div>
+          <h3 class="card-title">{{ plan.name }}</h3>
+          <div style="font-size: 2.25rem; font-weight: 800; margin: 1rem 0 1.25rem;">
+            ${{ plan.price }}<span style="font-size: 0.9rem; font-weight: 400; color: var(--muted-foreground);">/mo</span>
+          </div>
+          <ul style="list-style: none; margin-bottom: 1.5rem; font-size: 0.875rem; color: var(--muted-foreground);">
+            {% for feature in plan.features %}
+            <li style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fafafa" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <span>{{ feature }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        <a href="/members" class="btn btn-outline" style="width: 100%;">Enroll Member</a>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <!-- DevOps Pipeline Architecture Card -->
+  <section style="margin-bottom: 4rem;">
+    <div class="card" style="background: #18181b; border: 1px solid #3f3f46;">
+      <div class="card-header">
+        <span class="badge badge-zinc" style="margin-bottom: 0.5rem;">DevOps Specifications</span>
+        <h3 class="card-title">Automated DevOps Lifecycle Architecture</h3>
+        <p class="card-desc">Seamless verification and container deployment workflow.</p>
+      </div>
+      <div class="grid-3" style="margin-top: 1.25rem;">
+        <div style="background: #121215; padding: 1.25rem; border-radius: var(--radius); border: 1px solid var(--border);">
+          <div style="font-weight: 600; margin-bottom: 0.25rem;">1. VCS & GitHub Actions</div>
+          <p style="font-size: 0.825rem; color: var(--muted-foreground);">Automated code linting via Flake8, Pytest test suites, and Docker image assembly on every Git push.</p>
+        </div>
+        <div style="background: #121215; padding: 1.25rem; border-radius: var(--radius); border: 1px solid var(--border);">
+          <div style="font-weight: 600; margin-bottom: 0.25rem;">2. Docker Containerization</div>
+          <p style="font-size: 0.825rem; color: var(--muted-foreground);">Minimalist Python 3.11-slim container running with non-root security principles and built-in healthcheck probes.</p>
+        </div>
+        <div style="background: #121215; padding: 1.25rem; border-radius: var(--radius); border: 1px solid var(--border);">
+          <div style="font-weight: 600; margin-bottom: 0.25rem;">3. Jenkins Quality Gate</div>
+          <p style="font-size: 0.825rem; color: var(--muted-foreground);">Controlled CI server pipeline validating code compilation, artifact testing, and continuous delivery deployment.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Fetch live stats from API
+  async function loadStats() {
+    try {
+      const res = await fetch('/api/stats');
+      const data = await res.json();
+      if (data.success) {
+        document.getElementById('stat-members').innerText = data.data.active_members;
+        document.getElementById('stat-classes').innerText = data.data.total_classes;
+        document.getElementById('stat-occupancy').innerText = data.data.occupancy_rate + '%';
+      }
+    } catch (e) {
+      console.error('Failed to load stats', e);
+    }
+  }
+  loadStats();
+</script>
+{% endblock %}

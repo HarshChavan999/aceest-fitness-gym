@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block title %}Members Directory — ACEest Fitness & Gym{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top: 2.5rem; padding-bottom: 4rem;">
+  <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; flex-wrap: wrap; gap: 1rem;">
+    <div>
+      <h1 style="font-size: 2rem; font-weight: 700; letter-spacing: -0.025em;">Member Management</h1>
+      <p style="color: var(--muted-foreground); font-size: 0.9rem;">Monitor active registrations, membership tiers, and onboard new athletes.</p>
+    </div>
+    <button class="btn btn-primary" onclick="toggleModal(true)">+ Add New Member</button>
+  </div>
+
+  <!-- Search Filter -->
+  <div style="margin-bottom: 1.5rem; max-width: 360px;">
+    <input type="text" id="member-search" class="form-control" placeholder="Search members by name or email..." oninput="filterMembers()">
+  </div>
+
+  <!-- Members Table -->
+  <div class="table-wrapper">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Athlete Name</th>
+          <th>Email Address</th>
+          <th>Age</th>
+          <th>Membership Tier</th>
+          <th>Enrolled Date</th>
+          <th>Status</th>
+          <th style="text-align: right;">Action</th>
+        </tr>
+      </thead>
+      <tbody id="members-table-body">
+        {% for m in members %}
+        <tr data-name="{{ m.name | lower }}" data-email="{{ m.email | lower }}">
+          <td style="font-weight: 600; color: var(--muted-foreground);">#{{ m.id }}</td>
+          <td style="font-weight: 600;">{{ m.name }}</td>
+          <td style="color: var(--muted-foreground);">{{ m.email }}</td>
+          <td>{{ m.age }} yrs</td>
+          <td><span class="badge badge-zinc">{{ m.plan | upper }}</span></td>
+          <td style="color: var(--muted-foreground);">{{ m.joined_date }}</td>
+          <td><span class="badge badge-success">● {{ m.status }}</span></td>
+          <td style="text-align: right;">
+            <button class="btn btn-destructive btn-sm" onclick="deleteMember({{ m.id }})">Remove</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Dialog -->
+<div id="add-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center;">
+  <div class="card" style="width: 100%; max-width: 480px; margin: 1.5rem; background: #121215; border-color: #3f3f46;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
+      <h3 class="card-title">Register Athlete</h3>
+      <button onclick="toggleModal(false)" style="background: none; border: none; color: var(--muted-foreground); cursor: pointer; font-size: 1.25rem;">✕</button>
+    </div>
+
+    <form id="member-form" onsubmit="submitMember(event)">
+      <div class="form-group">
+        <label class="form-label" for="m-name">Full Name</label>
+        <input type="text" id="m-name" class="form-control" required placeholder="e.g. Jordan Cole">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="m-email">Email Address</label>
+        <input type="email" id="m-email" class="form-control" required placeholder="jordan@aceest.fit">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="m-age">Age</label>
+        <input type="number" id="m-age" class="form-control" min="14" max="100" required placeholder="26">
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="m-plan">Membership Tier</label>
+        <select id="m-plan" class="form-control">
+          {% for p in plans %}
+          <option value="{{ p.id }}">{{ p.name }} (${{ p.price }}/mo)</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.75rem;">
+        <button type="button" class="btn btn-secondary" onclick="toggleModal(false)">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Member</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function toggleModal(show) {
+    const modal = document.getElementById('add-modal');
+    modal.style.display = show ? 'flex' : 'none';
+    if (!show) {
+      document.getElementById('member-form').reset();
+    }
+  }
+
+  function filterMembers() {
+    const q = document.getElementById('member-search').value.toLowerCase();
+    const rows = document.querySelectorAll('#members-table-body tr');
+    rows.forEach(r => {
+      const name = r.getAttribute('data-name') || '';
+      const email = r.getAttribute('data-email') || '';
+      r.style.display = (name.includes(q) || email.includes(q)) ? '' : 'none';
+    });
+  }
+
+  async function submitMember(e) {
+    e.preventDefault();
+    const name = document.getElementById('m-name').value;
+    const email = document.getElementById('m-email').value;
+    const age = parseInt(document.getElementById('m-age').value);
+    const plan = document.getElementById('m-plan').value;
+
+    try {
+      const res = await fetch('/api/members', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, age, plan })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Athlete registered successfully!');
+        toggleModal(false);
+        setTimeout(() => location.reload(), 800);
+      } else {
+        showToast(data.error || 'Failed to register athlete.', true);
+      }
+    } catch (err) {
+      showToast('Network error while registering member.', true);
+    }
+  }
+
+  async function deleteMember(id) {
+    if (!confirm(`Are you sure you want to remove member #${id}?`)) return;
+    try {
+      const res = await fetch(`/api/members/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Member removed successfully.');
+        setTimeout(() => location.reload(), 600);
+      } else {
+        showToast(data.error || 'Failed to remove member.', true);
+      }
+    } catch (err) {
+      showToast('Network error while deleting member.', true);
+    }
+  }
+</script>
+{% endblock %}

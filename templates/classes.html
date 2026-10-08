@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+
+{% block title %}Studio Classes — ACEest Fitness & Gym{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top: 2.5rem; padding-bottom: 4rem;">
+  <div style="margin-bottom: 2rem;">
+    <h1 style="font-size: 2rem; font-weight: 700; letter-spacing: -0.025em;">Studio Class Schedules</h1>
+    <p style="color: var(--muted-foreground); font-size: 0.9rem;">Join elite group training sessions curated by certified performance specialists.</p>
+  </div>
+
+  <div class="grid-2">
+    {% for c in classes %}
+    <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+          <span class="badge badge-zinc">{{ c.category }}</span>
+          <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3);">
+            {{ c.intensity }} Intensity
+          </span>
+        </div>
+
+        <h3 class="card-title">{{ c.title }}</h3>
+        <p style="font-size: 0.875rem; color: var(--muted-foreground); margin-top: 0.35rem;">
+          Led by <strong style="color: var(--foreground);">{{ c.instructor }}</strong> • {{ c.time }}
+        </p>
+
+        <div style="margin: 1.5rem 0;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--muted-foreground);">
+            <span>Capacity Utilization</span>
+            <span><strong style="color: var(--foreground);">{{ c.booked }}</strong> / {{ c.capacity }} Reserved</span>
+          </div>
+          <div class="progress">
+            <div class="progress-bar" style="width: {{ (c.booked / c.capacity * 100) | round }}%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        {% if c.booked >= c.capacity %}
+        <button class="btn btn-secondary" style="width: 100%; cursor: not-allowed; opacity: 0.6;" disabled>Class Full</button>
+        {% else %}
+        <button class="btn btn-primary" style="width: 100%;" onclick="bookClass('{{ c.id }}')">Reserve Workout Spot</button>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function bookClass(classId) {
+    try {
+      const res = await fetch('/api/classes/book', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ class_id: classId })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(data.message);
+        setTimeout(() => location.reload(), 700);
+      } else {
+        showToast(data.error || 'Failed to reserve spot.', true);
+      }
+    } catch (e) {
+      showToast('Network error while booking class.', true);
+    }
+  }
+</script>
+{% endblock %}

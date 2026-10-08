@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Health Metrics & BMI Calculator — ACEest Fitness & Gym{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-top: 2.5rem; padding-bottom: 4rem;">
+  <div style="margin-bottom: 2rem;">
+    <h1 style="font-size: 2rem; font-weight: 700; letter-spacing: -0.025em;">Health Metrics & Metabolic Assessment</h1>
+    <p style="color: var(--muted-foreground); font-size: 0.9rem;">Compute Body Mass Index (BMI) and baseline Basal Metabolic Rate (BMR) powered by the backend calculation API.</p>
+  </div>
+
+  <div class="grid-2">
+    <!-- Calculator Input Form -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Athletic Assessment Input</h3>
+        <p class="card-desc">Enter your biometric data to compute metrics.</p>
+      </div>
+
+      <form id="calc-form" onsubmit="calculateMetrics(event)">
+        <div class="form-group">
+          <label class="form-label" for="c-weight">Body Weight (kg)</label>
+          <input type="number" step="0.1" id="c-weight" class="form-control" required placeholder="e.g. 78.5" value="75">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="c-height">Height (cm)</label>
+          <input type="number" step="0.1" id="c-height" class="form-control" required placeholder="e.g. 178" value="175">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="c-age">Age (years)</label>
+          <input type="number" id="c-age" class="form-control" required placeholder="e.g. 25" value="26">
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">Compute Assessment</button>
+      </form>
+    </div>
+
+    <!-- Output Display Card -->
+    <div class="card" id="result-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+      <div>
+        <div class="card-header">
+          <span class="badge badge-zinc" style="margin-bottom: 0.5rem;">Diagnostic Output</span>
+          <h3 class="card-title">Biometric Results</h3>
+        </div>
+
+        <div style="margin: 1.5rem 0;">
+          <div style="font-size: 0.85rem; color: var(--muted-foreground); text-transform: uppercase; font-weight: 600;">Calculated BMI</div>
+          <div style="font-size: 3rem; font-weight: 800; letter-spacing: -0.03em;" id="res-bmi">24.49</div>
+          <div id="res-badge" class="badge badge-success" style="margin-top: 0.5rem;">Normal weight</div>
+        </div>
+
+        <div style="padding: 1rem; background: #18181b; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 1.5rem;">
+          <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">Estimated Basal Metabolic Rate (BMR)</div>
+          <div style="font-size: 1.4rem; font-weight: 700; color: #fafafa;"><span id="res-bmr">1724</span> kcal / day</div>
+          <div style="font-size: 0.8rem; color: var(--muted-foreground); margin-top: 0.25rem;">Daily caloric burn at complete physical rest.</div>
+        </div>
+
+        <div>
+          <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 0.25rem;">Prescribed Strategy</div>
+          <p id="res-rec" style="font-size: 0.875rem; color: var(--muted-foreground);">
+            Optimal baseline. Maintain balanced macronutrient intake and hybrid conditioning.
+          </p>
+        </div>
+      </div>
+
+      <div style="font-size: 0.75rem; color: #52525b; border-top: 1px solid var(--border-subtle); padding-top: 1rem; margin-top: 1.5rem;">
+        Calculated via Mifflin-St Jeor & WHO classification standards. Verified by Pytest automated test suites.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function calculateMetrics(e) {
+    e.preventDefault();
+    const weight = parseFloat(document.getElementById('c-weight').value);
+    const height = parseFloat(document.getElementById('c-height').value);
+    const age = parseInt(document.getElementById('c-age').value);
+
+    try {
+      const res = await fetch('/api/calculator/bmi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ weight_kg: weight, height_cm: height, age: age })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        document.getElementById('res-bmi').innerText = data.data.bmi;
+        document.getElementById('res-bmr').innerText = data.data.estimated_bmr_kcal;
+        document.getElementById('res-rec').innerText = data.data.recommendation;
+        
+        const badge = document.getElementById('res-badge');
+        badge.innerText = data.data.category;
+        if (data.data.category === 'Normal weight') {
+          badge.className = 'badge badge-success';
+        } else if (data.data.category === 'Overweight') {
+          badge.className = 'badge';
+          badge.style.background = 'rgba(245, 158, 11, 0.15)';
+          badge.style.color = '#fbbf24';
+          badge.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+        } else {
+          badge.className = 'badge';
+          badge.style.background = 'rgba(239, 68, 68, 0.15)';
+          badge.style.color = '#f87171';
+          badge.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+        }
+        showToast('Assessment updated successfully.');
+      } else {
+        showToast(data.error || 'Calculation error.', true);
+      }
+    } catch (err) {
+      showToast('Network error during calculation.', true);
+    }
+  }
+</script>
+{% endblock %}
